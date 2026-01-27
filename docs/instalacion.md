@@ -15,13 +15,12 @@ Valores recomendados para Docker:
 ```
 APP_URL=http://localhost
 DB_CONNECTION=mysql
-DB_HOST=0.0.0.0
+DB_HOST=mysql
 DB_PORT=3306
 DB_DATABASE=sys_beneficiarios
-DB_USERNAME=app
-DB_PASSWORD=TuClaveSegura123!
+DB_USERNAME=root
+DB_PASSWORD=secret
 ```
-> La base de datos se ejecuta fuera de Docker; ajusta estas variables con la IP y credenciales externas proporcionadas.
 
 ## 2) Levantar contenedores
 
@@ -32,7 +31,7 @@ docker compose up -d --build
 Servicios incluidos (ver `docker-compose.yml`):
 - `app`: PHP-FPM 8.2/8.3 (Laravel)
 - `nginx`: servidor web (expuesto en `http://localhost`)
-- `bd externa`: conexi�n al motor MySQL remoto configurado en el `.env`
+- `mysql`: base de datos MySQL 8
 - `node`: entorno Node 20 para Vite
 
 ## 3) Inicialización

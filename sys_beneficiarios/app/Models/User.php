@@ -63,4 +63,14 @@ class User extends Authenticatable
         });
     }
 
+    // Salud360 relations
+    public function asignacionesRecibidas()
+    {
+        return $this->hasMany(Salud360Assignment::class, 'psicologo_id');
+    }
+
+    public function sesionesComoPsicologo()
+    {
+        return $this->hasMany(Salud360Session::class, 'psicologo_id');
+    }
 }

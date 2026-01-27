@@ -13,9 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use App\Models\Seccion;
-use App\Support\SeccionResolver;
 
 class BeneficiarioController extends Controller
 {
@@ -27,7 +25,7 @@ class BeneficiarioController extends Controller
             'municipio_id','seccional','distrito_local','distrito_federal','sexo','discapacidad','edad_min','edad_max'
         ]);
 
-        $baseQuery = Beneficiario::with(['municipio','creador','seccion'])
+        $baseQuery = Beneficiario::with(['municipio','creador'])
             ->when($q, function ($query) use ($q) {
                 $query->where(function ($sub) use ($q) {
                     $sub->where('folio_tarjeta', 'like', "%$q%")
@@ -38,9 +36,9 @@ class BeneficiarioController extends Controller
                 });
             })
             ->when($filters['municipio_id'] ?? null, fn($q2,$v)=>$q2->where('municipio_id',$v))
-            ->when($filters['seccional'] ?? null, fn($q2,$v)=>$q2->whereHas('seccion', fn($sq) => $sq->where('seccional','like',"%$v%")))
-            ->when($filters['distrito_local'] ?? null, fn($q2,$v)=>$q2->whereHas('seccion', fn($sq) => $sq->where('distrito_local','like',"%$v%")))
-            ->when($filters['distrito_federal'] ?? null, fn($q2,$v)=>$q2->whereHas('seccion', fn($sq) => $sq->where('distrito_federal','like',"%$v%")))
+            ->when($filters['seccional'] ?? null, fn($q2,$v)=>$q2->where('seccional','like',"%$v%"))
+            ->when($filters['distrito_local'] ?? null, fn($q2,$v)=>$q2->where('distrito_local','like',"%$v%"))
+            ->when($filters['distrito_federal'] ?? null, fn($q2,$v)=>$q2->where('distrito_federal','like',"%$v%"))
             ->when(($filters['sexo'] ?? '') !== '', fn($q2,$v)=>$q2->where('sexo',$v))
             ->when(($filters['discapacidad'] ?? '') !== '', fn($q2,$v)=>$q2->where('discapacidad',(bool)$v))
             ->when($filters['edad_min'] ?? null, fn($q2,$v)=>$q2->where('edad','>=',(int)$v))
@@ -52,7 +50,7 @@ class BeneficiarioController extends Controller
         if ($request->wantsJson()) {
             $limit = max(1, min($request->integer('limit', 20), 50));
             $items = (clone $baseQuery)
-                ->with(['municipio:id,nombre','seccion:id,seccional'])
+                ->with('municipio:id,nombre')
                 ->orderBy('created_at', 'desc')
                 ->limit($limit)
                 ->get();
@@ -63,7 +61,6 @@ class BeneficiarioController extends Controller
                 'curp' => $row->curp,
                 'folio_tarjeta' => $row->folio_tarjeta,
                 'municipio' => optional($row->municipio)->nombre,
-                'seccional' => optional($row->seccion)->seccional,
             ]);
 
             return response()->json(['items' => $payload]);
@@ -97,10 +94,19 @@ class BeneficiarioController extends Controller
         try {
             $beneficiario = DB::transaction(function () use ($request, $data) {
                 $beneficiario = new Beneficiario($data);
+                // Calcular distritos y municipio desde seccional capturado en domicilio
                 $dom = $request->input('domicilio', []);
-                $seccion = $this->resolveSeccionFromInput($dom);
-                $beneficiario->seccion()->associate($seccion);
-                $beneficiario->municipio_id = $dom['municipio_id'] ?? $seccion?->municipio_id;
+                if ($dom) {
+                    $beneficiario->seccional = $dom['seccional'] ?? $beneficiario->seccional;
+                    $comp = $this->computeFromSeccional($dom['seccional'] ?? null);
+                    if ($comp) {
+                        $beneficiario->distrito_local = $comp['distrito_local'];
+                        $beneficiario->distrito_federal = $comp['distrito_federal'];
+                        $beneficiario->municipio_id = $dom['municipio_id'] ?? $comp['municipio_id'];
+                    } elseif (isset($dom['municipio_id'])) {
+                        $beneficiario->municipio_id = $dom['municipio_id'];
+                    }
+                }
                 $beneficiario->id = (string) Str::uuid();
                 $beneficiario->created_by = Auth::user()->uuid;
 
@@ -108,7 +114,7 @@ class BeneficiarioController extends Controller
                     throw new \RuntimeException('No se pudo guardar el beneficiario');
                 }
 
-                $this->saveDomicilio($request, $beneficiario, $seccion);
+                $this->saveDomicilio($request, $beneficiario);
 
                 return $beneficiario;
             });
@@ -142,13 +148,22 @@ class BeneficiarioController extends Controller
         $this->authorize('update', $beneficiario);
         $data = $request->validated();
         $beneficiario->fill($data);
+        // Calcular distritos/municipio desde seccional del domicilio
         $dom = $request->input('domicilio', []);
-        $seccion = $this->resolveSeccionFromInput($dom, $beneficiario->seccion);
-        $beneficiario->seccion()->associate($seccion);
-        $beneficiario->municipio_id = $dom['municipio_id'] ?? $seccion?->municipio_id ?? $beneficiario->municipio_id;
+        if ($dom) {
+            $beneficiario->seccional = $dom['seccional'] ?? $beneficiario->seccional;
+            $comp = $this->computeFromSeccional($dom['seccional'] ?? null);
+            if ($comp) {
+                $beneficiario->distrito_local = $comp['distrito_local'];
+                $beneficiario->distrito_federal = $comp['distrito_federal'];
+                $beneficiario->municipio_id = $dom['municipio_id'] ?? $comp['municipio_id'];
+            } elseif (isset($dom['municipio_id'])) {
+                $beneficiario->municipio_id = $dom['municipio_id'];
+            }
+        }
         $beneficiario->save();
 
-        $this->saveDomicilio($request, $beneficiario, $seccion);
+        $this->saveDomicilio($request, $beneficiario);
 
         return redirect()->route('beneficiarios.index')->with('status', 'Beneficiario actualizado correctamente');
     }
@@ -160,21 +175,35 @@ class BeneficiarioController extends Controller
         return redirect()->route('beneficiarios.index')->with('status', 'Beneficiario eliminado');
     }
 
-    protected function saveDomicilio(Request $request, Beneficiario $beneficiario, ?Seccion $seccion = null): void
+    protected function saveDomicilio(Request $request, Beneficiario $beneficiario): void
     {
         $dom = $request->input('domicilio');
         if (!$dom) {
             return;
         }
-        $municipioId = $dom['municipio_id'] ?? $seccion?->municipio_id ?? $beneficiario->municipio_id;
+        // Completar valores de domicilio desde seccional
+        $comp = $this->computeFromSeccional($dom['seccional'] ?? null);
+        if ($comp) {
+            $dom['distrito_local'] = $dom['distrito_local'] ?? $comp['distrito_local'];
+            $dom['distrito_federal'] = $dom['distrito_federal'] ?? $comp['distrito_federal'];
+            $dom['municipio_id'] = $dom['municipio_id'] ?? $comp['municipio_id'];
+        }
+        $municipioId = $dom['municipio_id'] ?? $beneficiario->municipio_id ?? null;
+        $municipioNombre = null;
+        if ($municipioId) {
+            $municipioNombre = Municipio::whereKey($municipioId)->value('nombre');
+        }
         $payload = array_filter([
             'calle' => $dom['calle'] ?? null,
             'numero_ext' => $dom['numero_ext'] ?? null,
             'numero_int' => $dom['numero_int'] ?? null,
             'colonia' => $dom['colonia'] ?? null,
-            'municipio_id' => $municipioId,
+            'municipio' => $municipioNombre,
+            'municipio_id' => $dom['municipio_id'] ?? null,
             'codigo_postal' => $dom['codigo_postal'] ?? null,
-            'seccion_id' => $seccion?->id,
+            'seccional' => $dom['seccional'] ?? null,
+            'distrito_local' => $dom['distrito_local'] ?? null,
+            'distrito_federal' => $dom['distrito_federal'] ?? null,
         ], fn ($v) => !is_null($v));
         if (empty($payload)) {
             return;
@@ -184,15 +213,22 @@ class BeneficiarioController extends Controller
         $domicilio->beneficiario_id = $beneficiario->id;
         $domicilio->save();
     }
-    private function resolveSeccionFromInput(array $domicilio, ?Seccion $fallback = null): ?Seccion
+    private function computeFromSeccional(?string $raw): ?array
     {
-        $seccion = SeccionResolver::resolve($domicilio['seccional'] ?? null) ?: $fallback;
-        if (! $seccion) {
-            throw ValidationException::withMessages([
-                'domicilio.seccional' => 'La seccional no se encuentra en el catálogo.',
-            ]);
-        }
-
-        return $seccion;
+        $raw = trim((string)($raw ?? ''));
+        if ($raw === '') return null;
+        $candidates = array_unique([
+            $raw,
+            ltrim($raw, '0'),
+            str_pad(ltrim($raw, '0'), 4, '0', STR_PAD_LEFT),
+        ]);
+        $sec = Seccion::whereIn('seccional', $candidates)->first();
+        if (!$sec) return null;
+        return [
+            'municipio_id' => $sec->municipio_id,
+            'distrito_local' => $sec->distrito_local,
+            'distrito_federal' => $sec->distrito_federal,
+        ];
     }
 }
+

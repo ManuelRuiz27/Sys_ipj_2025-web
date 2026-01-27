@@ -49,5 +49,5 @@ docker compose exec app php artisan db:seed --force
 
 - Nginx `access.log`/`error.log`
 - Laravel logs: `sys_beneficiarios/storage/logs/`
-- MySQL: supervisa el servidor externo configurado en `.env` (accesibilidad, respaldos, permisos de red).
+- MySQL: volumen `db_data`
 

@@ -67,7 +67,7 @@ class DashboardController extends Controller
     {
         return $query
             ->when($request->filled('municipio_id'), fn($q)=>$q->where('municipio_id', $request->input('municipio_id')))
-            ->when($request->filled('seccional'), fn($q)=>$q->whereHas('seccion', fn($sq)=>$sq->where('seccional','like','%'.$request->input('seccional').'%')))
+            ->when($request->filled('seccional'), fn($q)=>$q->where('seccional','like','%'.$request->input('seccional').'%'))
             ->when($request->filled('capturista'), fn($q)=>$q->where('created_by', $request->input('capturista')))
             ->when($request->filled('from'), fn($q)=>$q->whereDate('created_at','>=', $request->date('from')))
             ->when($request->filled('to'), fn($q)=>$q->whereDate('created_at','<=', $request->date('to')));
@@ -95,9 +95,8 @@ class DashboardController extends Controller
 
         // By Seccional (top 10)
         $bySec = (clone $baseQuery)
-            ->join('secciones', 'beneficiarios.seccion_id', '=', 'secciones.id')
-            ->selectRaw('secciones.seccional as seccional, COUNT(*) as c')
-            ->groupBy('secciones.seccional')
+            ->selectRaw('seccional, COUNT(*) as c')
+            ->groupBy('seccional')
             ->orderByDesc('c')
             ->limit(10)
             ->get();

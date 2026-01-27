@@ -9,7 +9,7 @@ use Tests\TestCase;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    foreach (['admin', 'capturista'] as $role) {
+    foreach (['admin', 'capturista', 'encargado_360', 'encargado_bienestar', 'psicologo'] as $role) {
         Role::firstOrCreate([
             'name' => $role,
             'guard_name' => 'web',

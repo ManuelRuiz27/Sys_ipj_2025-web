@@ -16,6 +16,7 @@ class RolesUsersSeeder extends Seeder
 
         $users = [
             ['email' => 'admin@example.com', 'name' => 'Administrador', 'role' => 'admin'],
+            ['email' => 'encargado@example.com', 'name' => 'Encargado', 'role' => 'encargado_360'],
             ['email' => 'capturista@example.com', 'name' => 'Capturista', 'role' => 'capturista'],
         ];
 

@@ -112,12 +112,8 @@ Artisan::command('verify:quick', function () {
         return 1;
     }
 
-    // Municipio y seccion de prueba
+    // Municipio de prueba
     $mun = \App\Models\Municipio::firstOrCreate(['clave' => 9999], ['nombre' => 'Prueba']);
-    $seccion = \App\Models\Seccion::firstOrCreate(
-        ['seccional' => '0001'],
-        ['municipio_id' => $mun->id, 'distrito_local' => 'DL-01', 'distrito_federal' => 'DF-01']
-    );
 
     // Crear beneficiario
     $b = new \App\Models\Beneficiario();
@@ -136,7 +132,9 @@ Artisan::command('verify:quick', function () {
     $b->id_ine = 'INE123';
     $b->telefono = '5512345678';
     $b->municipio_id = $mun->id;
-    $b->seccion()->associate($seccion);
+    $b->seccional = '001';
+    $b->distrito_local = 'DL-01';
+    $b->distrito_federal = 'DF-01';
     $b->created_by = $admin->uuid;
     $b->save();
 
@@ -154,9 +152,9 @@ Artisan::command('verify:quick', function () {
     $d->calle = 'Falsa';
     $d->numero_ext = '123';
     $d->colonia = 'Centro';
-    $d->municipio_id = $mun->id;
+    $d->municipio = 'Prueba';
     $d->codigo_postal = '01234';
-    $d->seccion_id = $seccion->id;
+    $d->seccional = '001';
     $d->save();
 
     // Activity log count

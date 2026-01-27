@@ -20,10 +20,6 @@ class ValidationTest extends TestCase
     protected function validPayload(array $overrides = []): array
     {
         $mun = Municipio::firstOrCreate(['clave'=>1],['nombre'=>'Test']);
-        $seccion = \App\Models\Seccion::firstOrCreate(
-            ['seccional' => '0001'],
-            ['municipio_id' => $mun->id, 'distrito_local' => 'DL', 'distrito_federal' => 'DF']
-        );
         return array_merge([
             'folio_tarjeta' => 'FT-'.rand(100,999),
             'nombre' => 'Juan',
@@ -41,7 +37,7 @@ class ValidationTest extends TestCase
                 'colonia' => 'Centro',
                 'municipio_id' => $mun->id,
                 'codigo_postal' => '01234',
-                'seccional' => $seccion->seccional,
+                'seccional' => '001',
             ],
         ], $overrides);
     }
@@ -87,7 +83,7 @@ class ValidationTest extends TestCase
 
         $benef = \App\Models\Beneficiario::where('folio_tarjeta', 'FT-CREATE')->first();
         $this->assertNotNull($benef);
-        $this->assertSame('0001', optional($benef->seccion)->seccional);
+        $this->assertSame('001', $benef->seccional);
         $this->assertNotNull($benef->municipio_id);
 
         $this->assertDatabaseHas('domicilios', [

@@ -1,6 +1,6 @@
 # Sys IPJ 2025 — Módulo Beneficiarios
 
-Aplicación Laravel 11 para la gestión y registro de beneficiarios, con autenticación (Breeze), roles (Spatie Permission), paneles con KPIs y carga de catálogos (municipios y secciones). Se ejecuta en Docker (PHP-FPM + Nginx + Node).
+Aplicación Laravel 11 para la gestión y registro de beneficiarios, con autenticación (Breeze), roles (Spatie Permission), paneles con KPIs y carga de catálogos (municipios y secciones). Se ejecuta en Docker (PHP-FPM + Nginx + MySQL + Node).
 
 - Código de este módulo: este directorio (`sys_beneficiarios/`)
 - Orquestación Docker: `../docker-compose.yml`
@@ -17,12 +17,11 @@ cp .env.example .env
 Revisa en `.env` (valores por defecto para Docker):
 - `APP_URL=http://localhost`
 - `DB_CONNECTION=mysql`
-- `DB_HOST=0.0.0.0`
+- `DB_HOST=mysql`
 - `DB_PORT=3306`
 - `DB_DATABASE=sys_beneficiarios`
-- `DB_USERNAME=app`
-- `DB_PASSWORD=TuClaveSegura123!`
-> La base de datos corre fuera de Docker; actualiza estos valores con el host externo que recibas.
+- `DB_USERNAME=root`
+- `DB_PASSWORD=secret`
 
 2) Levanta contenedores desde la raíz del repo:
 
@@ -52,7 +51,7 @@ docker compose exec node npm run build
 Servicios en Docker:
 - `app`: PHP-FPM 8.3 (Laravel)
 - `nginx`: sirve `public/` en puerto 80
-- `bd externa`: conexi�n al MySQL remoto configurado en el `.env`
+- `mysql`: MySQL 8 (DB `sys_beneficiarios`, credenciales root/secret)
 - `node`: Node 20 para Vite
 
 ## Catálogos (Municipios y Secciones)
@@ -79,6 +78,10 @@ Opciones útiles:
   - Usuarios: `/admin/usuarios`
   - Beneficiarios: `/admin/beneficiarios` (incluye export)
   - Catálogos: `/admin/catalogos`
+- Encargado 360 (Salud360):
+  - Panel: `/s360/enc360`
+  - KPIs: `/s360/enc360/dash`
+  - Asignaciones: `/s360/enc360/asignaciones`, `/s360/enc360/assign*`
 - Capturista:
   - Panel: `/capturista`
   - KPIs personales: `/capturista/kpis` (alias: `/mi-progreso/kpis`)
@@ -135,7 +138,7 @@ docker compose exec app php artisan test
 
 - Logs de Laravel: `storage/logs/`
 - Nginx: `/var/log/nginx/error.log` y `access.log`
-- MySQL: valida la conectividad desde el contenedor `app` hacia el servidor externo definido en `.env` (firewall, whitelist, credenciales).
+- MySQL: volumen `db_data` del compose
 - Guía: `../docs/troubleshooting.md`
 
 ## Roadmap
@@ -164,7 +167,7 @@ docker compose exec app php artisan test
 - CRUDs base de beneficiarios y domicilios.
 - Paneles y KPIs por rol (admin, encargado, capturista).
 - Importación de catálogos (municipios y secciones) vía comando artisan.
-- Infra de Docker (app, nginx y node) y build de assets con Vite (BD externa).
+- Infra de Docker (app, nginx, mysql, node) y build de assets con Vite.
 
 ## Licencia
 
@@ -173,7 +176,7 @@ Proyecto interno del equipo. Uso restringido según políticas vigentes.
 ## API REST /api/v1
 
 ### Setup local
-1. Duplicar `.env.example` a `.env` y definir `APP_URL`, variables `DB_*`, `SANCTUM_STATEFUL_DOMAINS` y los or�genes `APP_IPJ_URL` / `APP_IPJ_PROD_URL`.
+1. Duplicar `.env.example` a `.env` y definir `APP_URL`, variables `DB_*`, `SANCTUM_STATEFUL_DOMAINS` y los or�genes `APP_IPJ_URL` / `APP_IPJ_PROD_URL`.
 2. Instalar dependencias de backend y frontend: `composer install` y `npm install`.
 3. Generar clave y cargar base de datos:
    - `php artisan key:generate`
@@ -184,19 +187,19 @@ Proyecto interno del equipo. Uso restringido según políticas vigentes.
    - `php artisan migrate`
 5. Ejecutar pruebas con Pest: `./vendor/bin/pest`.
 
-### Est�ndares de c�digo
-- PSR-12 y gu�as de Laravel: ejecutar `./vendor/bin/pint` antes de subir cambios.
-- Organizaci�n de carpetas:
-  - `app/Http/Controllers/Auth` para endpoints de autenticaci�n REST.
+### Est�ndares de c�digo
+- PSR-12 y gu�as de Laravel: ejecutar `./vendor/bin/pint` antes de subir cambios.
+- Organizaci�n de carpetas:
+  - `app/Http/Controllers/Auth` para endpoints de autenticaci�n REST.
   - `app/Http/Middleware` para cross-cutting concerns (ProblemJson, ETag, AccessLog).
   - `app/Http/Requests` para validaciones.
   - `app/Policies` y `app/Providers` para policies y gates.
-  - `app/Services` reservado para l�gica de dominio reusable.
-- Rutas en kebab-case (`beneficiarios.index`), clases en StudlyCase y m�todos en camelCase.
+  - `app/Services` reservado para l�gica de dominio reusable.
+- Rutas en kebab-case (`beneficiarios.index`), clases en StudlyCase y m�todos en camelCase.
 
 ### Comportamiento clave
 - `GET /api/v1/health` ? `200` + body `{ "status": "ok" }` con cabecera `ETag`.
 - `POST /api/v1/auth/login` ? `200` con token personal Sanctum (`token_type: Bearer`).
 - `POST /api/v1/auth/logout` ? `204` invalidando el token actual.
-- Errores de validaci�n devuelven `422` en formato `application/problem+json`.
+- Errores de validaci�n devuelven `422` en formato `application/problem+json`.
 - Respuestas JSON cacheables incluyen `ETag` y respetan `If-None-Match` devolviendo `304` cuando aplica.

@@ -19,14 +19,4 @@ class Seccion extends Model
     {
         return $this->belongsTo(Municipio::class);
     }
-
-    public function beneficiarios()
-    {
-        return $this->hasMany(Beneficiario::class);
-    }
-
-    public function domicilios()
-    {
-        return $this->hasMany(Domicilio::class);
-    }
 }
